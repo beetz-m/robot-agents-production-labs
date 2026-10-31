@@ -1,7 +1,14 @@
-version: '3'
+# Local development for the VRB lab "robot-agents-production-labs".
+#
+#   docker compose -f binder/docker-compose.yml up --build   # build + start
+#   open http://localhost:8888
+#   docker compose -f binder/docker-compose.yml down         # stop + remove
+#
+# The repository is mounted into the container, so edits to notebooks and
+# Python files are visible immediately. Dockerfile changes need a rebuild.
 services:
-  binder-template:
-    image: binder-template:main
+  robot-agents-production-labs:
+    image: robot-agents-production-labs:local
     build:
       context: ../
       dockerfile: ./binder/Dockerfile
@@ -11,24 +18,22 @@ services:
     working_dir: /home/repo
     command: jupyter lab --allow-root --NotebookApp.token='' --no-browser --ip=0.0.0.0
     ports:
-      - 8888:8888
+      - "8888:8888"
     volumes:
       - ../:/home/repo:rw
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # X11 socket for GUI apps
+      # Host display (Linux): run GUI apps on your own screen instead of the VNC desktop.
+      # Requires `xhost +local:docker` on the host. Uncomment together with DISPLAY below.
+      # - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
-      - AUTO_START_RVIZ=1
-      - AUTO_OPEN_DESKTOP=0
-      - AUTO_OPEN_DESKTOP_ANCHOR=split-right
-      - RVIZ_DISPLAY=:1
-      - RVIZ_CONFIG_FILE=/home/jovyan/.rviz2/default.rviz
       - LIBGL_ALWAYS_SOFTWARE=1
       - QT_X11_NO_MITSHM=1
-      - DISPLAY=${DISPLAY}  # Use host display for GUI apps
-      - NVIDIA_DRIVER_CAPABILITIES=all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      # - DISPLAY=${DISPLAY}
+      # GPU (NVIDIA Container Toolkit required). Uncomment together with `deploy:` below.
+      # - NVIDIA_DRIVER_CAPABILITIES=all
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]

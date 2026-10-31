@@ -1,108 +1,44 @@
 #!/bin/bash
-
+# Entrypoint of the VRB lab image. Binder (and docker-compose) pass the
+# JupyterLab start command as arguments; this script prepares the shell
+# environment and then hands over with `exec "$@"`.
+#
+# Do NOT start blocking foreground processes here. Background helpers must
+# end with `&`, otherwise Jupyter never starts and Binder reports a timeout.
 set -e
 
-source "${ROS_PATH}/setup.bash"
+REPO_DIR="${REPO_DIR:-/home/repo}"
 
-if [[ -f /workspace/ros/install/setup.bash ]]; then
-    source /workspace/ros/install/setup.bash
+# --- Source ROS (if the base image provides it) ------------------------------
+if [[ -n "${ROS_PATH:-}" && -f "${ROS_PATH}/setup.bash" ]]; then
+    # shellcheck disable=SC1091
+    source "${ROS_PATH}/setup.bash"
+elif [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
+    # shellcheck disable=SC1091
+    source "/opt/ros/${ROS_DISTRO}/setup.bash"
 fi
 
-log_startup_context() {
-    local log_file="/tmp/binder-startup.log"
-    {
-        echo "=== Binder entrypoint startup context ==="
-        echo "date=$(date -Iseconds)"
-        echo "pwd=$(pwd)"
-        printf 'argv='
-        printf '%q ' "$@"
-        printf '\n'
-        echo "--- selected environment ---"
-        env | sort | grep -E '^(BINDER|JUPYTER|JUPYTERHUB|NB|REPO|URL|PATH|QUERY|ROBOT|TASK|ENVIRONMENT)=' || true
-        echo "=== end startup context ==="
-    } | tee "${log_file}" >&2
-}
-
-import_workspace() {
-    local workspace_file="${JUPYTER_WORKSPACE_FILE:-/home/repo/new-workspace.jupyterlab-workspace}"
-
-    if [[ ! -f "${workspace_file}" ]]; then
-        return
+# --- Source built workspaces (if any exist) ----------------------------------
+for ws_setup in \
+    "${REPO_DIR}/ros2_ws/install/setup.bash" \
+    "${REPO_DIR}/catkin_ws/devel/setup.bash" \
+    "/workspace/ros/install/setup.bash"
+do
+    if [[ -f "${ws_setup}" ]]; then
+        # shellcheck disable=SC1090
+        source "${ws_setup}"
     fi
+done
 
+# --- Restore the saved JupyterLab layout (optional) --------------------------
+workspace_file="${JUPYTER_WORKSPACE_FILE:-${REPO_DIR}/new-workspace.jupyterlab-workspace}"
+if [[ -f "${workspace_file}" ]]; then
     jupyter lab workspaces import "${workspace_file}" >/tmp/jupyter-workspace-import.log 2>&1 || \
         echo "Workspace import failed; see /tmp/jupyter-workspace-import.log" >&2
-}
+fi
 
-update_cognitive_architecture() {
-    local repo_dir=""
-
-    for candidate in         "/home/jovyan/libs/cognitive_robot_abstract_machine"         "/root/libs/cognitive_robot_abstract_machine"
-    do
-        if [[ -d "${candidate}/.git" ]]; then
-            repo_dir="${candidate}"
-            break
-        fi
-    done
-
-    if [[ -z "${repo_dir}" ]]; then
-        echo "No cognitive_robot_abstract_machine checkout found to update" >&2
-        return
-    fi
-
-    echo "Updating cognitive_robot_abstract_machine in ${repo_dir}" >&2
-    git -C "${repo_dir}" pull --ff-only >/tmp/cognitive-architecture-pull.log 2>&1 ||         echo "cognitive_robot_abstract_machine update failed; see /tmp/cognitive-architecture-pull.log" >&2
-}
-
-start_rviz() {
-    if [[ "${AUTO_START_RVIZ:-1}" != "1" ]]; then
-        return
-    fi
-
-    export DISPLAY="${RVIZ_DISPLAY:-${DISPLAY:-:1}}"
-    export RVIZ_CONFIG_FILE="${RVIZ_CONFIG_FILE:-/home/jovyan/.rviz2/default.rviz}"
-    export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
-    export QT_X11_NO_MITSHM="${QT_X11_NO_MITSHM:-1}"
-
-    fit_rviz_window() {
-        local rviz_pid="$1"
-
-        if ! command -v wmctrl >/dev/null 2>&1; then
-            return
-        fi
-
-        for _ in $(seq 1 30); do
-            local window_id
-            window_id="$(wmctrl -lp 2>/dev/null | awk -v pid="${rviz_pid}" '$3 == pid {print $1; exit}')"
-            if [[ -n "${window_id}" ]]; then
-                wmctrl -i -r "${window_id}" -b add,maximized_vert,maximized_horz >/dev/null 2>&1 || true
-                wmctrl -i -a "${window_id}" >/dev/null 2>&1 || true
-                return
-            fi
-            sleep 1
-        done
-    }
-
-    (
-        while true; do
-            if xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1; then
-                echo "Starting RViz on display ${DISPLAY}" >&2
-                rviz2 -d "${RVIZ_CONFIG_FILE}" >/tmp/rviz2.log 2>&1 &
-                local rviz_pid=$!
-                fit_rviz_window "${rviz_pid}" &
-                wait "${rviz_pid}"
-                sleep 2
-                continue
-            fi
-            echo "Waiting for display ${DISPLAY} before starting RViz" >&2
-            sleep 2
-        done
-    ) &
-}
-
-log_startup_context "$@"
-update_cognitive_architecture
-import_workspace
-start_rviz
+# --- Lab-specific startup (background only) ----------------------------------
+# Example: start a ROS node visitors need, in the background:
+# ros2 launch my_pkg my_launch.py >/tmp/my_launch.log 2>&1 &
 
 exec "$@"

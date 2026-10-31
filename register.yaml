@@ -1,0 +1,12 @@
+# Parameter register of the teaching model (format of textbook Ch. 2). Nothing here comes from the twin.
+# provenance: ILLUSTRATIVE = a plausible choice for teaching; replace with your own plant's data.
+line_times_h:      {value: [10, 12, 9, 12, 8], unit: h per product, provenance: ILLUSTRATIVE, note: "five stations, one constraint (12 h)"}
+balanced_times_h:  {value: [10, 10, 10, 10, 10], unit: h per product, provenance: ILLUSTRATIVE}
+variability:       {value: "triangular 0.9 / 1.0 / 1.3 multiplier", unit: "-", provenance: ILLUSTRATIVE}
+supply_tasks_h:    {value: [0.4, 0.4, 0.3], unit: h per product per station, provenance: ILLUSTRATIVE, note: "fetching: bolt kit, tools, refill"}
+robot_good:        {value: {p: 0.95, k_max: 3, A: 0.97, rho: 1.0, r_h: 0.25, recovery: crew}, provenance: ILLUSTRATIVE}
+robot_poor:        {value: {p: 0.80, k_max: 3, A: 0.90, rho: 1.0, r_h: 0.50, recovery: crew}, provenance: ILLUSTRATIVE}
+breakdown:         {value: {availability: 0.95, mttr_h: [1, 24]}, provenance: ILLUSTRATIVE}
+rework:            {value: {share: 0.15, rework_h: 16}, provenance: ILLUSTRATIVE}
+chain:             {value: {demand: 240, cap_per_week: 5.5, base_per_week: 4.6, quay: 120, season_weeks: [14, 40], install_cap: 12}, provenance: ILLUSTRATIVE}
+hours_per_year:    {value: 5250, unit: working hours (250 days x 21 h), provenance: ILLUSTRATIVE}
